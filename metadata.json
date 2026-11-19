@@ -1,0 +1,6 @@
+{
+  "name": "SankhyaPrep",
+  "description": "Competitive Mathematics Practice Platform with Offline-First Storage, Cloud Sync, Dynamic Question Generation, Performance Analytics, and Web Admin Studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

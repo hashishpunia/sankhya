@@ -1,0 +1,439 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered student or admin user profile stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "targetExam": { "type": "string", "maxLength": 80 },
+        "preferredLanguage": { "type": "string", "enum": ["en", "hi"] },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "targetExam", "preferredLanguage", "role", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted admin role assignment record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "grantedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "grantedBy", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Mathematics curriculum category.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameHi": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "descriptionHi": { "type": "string", "maxLength": 400 },
+        "icon": { "type": "string", "maxLength": 40 },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "nameHi", "description", "descriptionHi", "icon", "order", "active", "createdAt", "updatedAt"]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "Mathematics practice topic belonging to a category.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameHi": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "descriptionHi": { "type": "string", "maxLength": 400 },
+        "defaultDifficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "defaultQuestionCount": { "type": "number" },
+        "defaultTimeLimitSec": { "type": "number" },
+        "supportsGenerator": { "type": "boolean" },
+        "order": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "categoryId", "name", "nameHi", "description", "descriptionHi", "defaultDifficulty", "defaultQuestionCount", "defaultTimeLimitSec", "supportsGenerator", "order", "active", "createdAt", "updatedAt"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Verified mathematics question in the centralized bank.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "topicId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "questionText": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "questionTextHi": { "type": "string", "maxLength": 1000 },
+        "questionType": { "type": "string", "enum": ["direct", "mcq", "fill_blank", "missing_number", "reverse", "true_false", "identify_incorrect"] },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "correctAnswer": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "options": { "type": "array" },
+        "explanation": { "type": "string", "maxLength": 1500 },
+        "explanationHi": { "type": "string", "maxLength": 1500 },
+        "marks": { "type": "number" },
+        "timeRecommendationSec": { "type": "number" },
+        "active": { "type": "boolean" },
+        "contentVersion": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "categoryId", "topicId", "questionText", "questionType", "difficulty", "correctAnswer", "options", "explanation", "marks", "timeRecommendationSec", "active", "contentVersion", "createdBy", "createdAt", "updatedAt"]
+    },
+    "GeneratorConfig": {
+      "title": "GeneratorConfig",
+      "description": "Admin-managed numeric bounds and parameters for dynamic question generation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "topicKey": { "type": "string", "maxLength": 64 },
+        "minNumber": { "type": "number" },
+        "maxNumber": { "type": "number" },
+        "digitLength": { "type": "number" },
+        "termCount": { "type": "number" },
+        "numeratorMin": { "type": "number" },
+        "numeratorMax": { "type": "number" },
+        "denominatorMin": { "type": "number" },
+        "denominatorMax": { "type": "number" },
+        "defaultDifficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "enabled": { "type": "boolean" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "topicKey", "minNumber", "maxNumber", "enabled", "updatedBy", "updatedAt"]
+    },
+    "PracticeSession": {
+      "title": "PracticeSession",
+      "description": "Completed or active student practice or test session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mode": { "type": "string", "enum": ["quick_recall", "basics", "practice", "test"] },
+        "topicId": { "type": "string", "maxLength": 128 },
+        "topicName": { "type": "string", "maxLength": 120 },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard", "mixed"] },
+        "totalQuestions": { "type": "number" },
+        "attemptedQuestions": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "incorrectAnswers": { "type": "number" },
+        "skippedQuestions": { "type": "number" },
+        "score": { "type": "number" },
+        "negativeMarking": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "totalTimeSec": { "type": "number" },
+        "avgTimePerQuestionSec": { "type": "number" },
+        "status": { "type": "string", "enum": ["in_progress", "completed"] },
+        "startedAtIso": { "type": "string", "maxLength": 40 },
+        "completedAtIso": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "mode", "topicId", "topicName", "difficulty", "totalQuestions", "attemptedQuestions", "correctAnswers", "incorrectAnswers", "skippedQuestions", "score", "negativeMarking", "accuracy", "totalTimeSec", "avgTimePerQuestionSec", "status", "startedAtIso", "updatedAt"]
+    },
+    "UserAnswer": {
+      "title": "UserAnswer",
+      "description": "Individual question answer record inside a practice or test session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sessionId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "questionId": { "type": "string", "maxLength": 128 },
+        "topicId": { "type": "string", "maxLength": 128 },
+        "questionText": { "type": "string", "maxLength": 1000 },
+        "selectedAnswer": { "type": "string", "maxLength": 200 },
+        "correctAnswer": { "type": "string", "maxLength": 200 },
+        "isCorrect": { "type": "boolean" },
+        "isSkipped": { "type": "boolean" },
+        "responseTimeSec": { "type": "number" },
+        "answeredAtIso": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "sessionId", "questionId", "topicId", "questionText", "selectedAnswer", "correctAnswer", "isCorrect", "isSkipped", "responseTimeSec", "answeredAtIso", "updatedAt"]
+    },
+    "UserStatistics": {
+      "title": "UserStatistics",
+      "description": "Aggregated user performance counters and streaks.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "totalAttempted": { "type": "number" },
+        "totalCorrect": { "type": "number" },
+        "totalIncorrect": { "type": "number" },
+        "totalSkipped": { "type": "number" },
+        "totalTimeSec": { "type": "number" },
+        "currentStreak": { "type": "number" },
+        "longestStreak": { "type": "number" },
+        "fastestResponseSec": { "type": "number" },
+        "lastPracticeDate": { "type": "string", "maxLength": 20 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "totalAttempted", "totalCorrect", "totalIncorrect", "totalSkipped", "totalTimeSec", "currentStreak", "longestStreak", "fastestResponseSec", "lastPracticeDate", "updatedAt"]
+    },
+    "DailyActivity": {
+      "title": "DailyActivity",
+      "description": "Per-day student practice metrics for streaks and charts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 160, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "date": { "type": "string", "maxLength": 20 },
+        "questionsAttempted": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "practiceTimeSec": { "type": "number" },
+        "sessionsCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "date", "questionsAttempted", "correctAnswers", "practiceTimeSec", "sessionsCount", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences for language, theme, sound, defaults, and daily target.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "language": { "type": "string", "enum": ["en", "hi"] },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+        "soundEnabled": { "type": "boolean" },
+        "vibrationEnabled": { "type": "boolean" },
+        "defaultDifficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "defaultQuestionCount": { "type": "number" },
+        "defaultTimerSec": { "type": "number" },
+        "dailyTarget": { "type": "number" },
+        "notificationsEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "language", "theme", "soundEnabled", "vibrationEnabled", "defaultDifficulty", "defaultQuestionCount", "defaultTimerSec", "dailyTarget", "notificationsEnabled", "updatedAt"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global content version, app promotion banner, and platform sync metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contentVersion": { "type": "number" },
+        "maintenanceMode": { "type": "boolean" },
+        "lastPublishNote": { "type": "string", "maxLength": 300 },
+        "officialDownloadUrl": { "type": "string", "maxLength": 500 },
+        "appPromoEnabled": { "type": "boolean" },
+        "appPromoTitle": { "type": "string", "maxLength": 100 },
+        "appPromoSubtitle": { "type": "string", "maxLength": 180 },
+        "appPromoCtaLabel": { "type": "string", "maxLength": 40 },
+        "appDeepLinkUrl": { "type": "string", "maxLength": 500 },
+        "appPromoMobileOnly": { "type": "boolean" },
+        "socialInstagramUrl": { "type": "string", "maxLength": 500 },
+        "socialTelegramUrl": { "type": "string", "maxLength": 500 },
+        "socialTwitterUrl": { "type": "string", "maxLength": 500 },
+        "socialYoutubeUrl": { "type": "string", "maxLength": 500 },
+        "socialWhatsappUrl": { "type": "string", "maxLength": 500 },
+        "socialWebsiteUrl": { "type": "string", "maxLength": 500 },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "contentVersion", "maintenanceMode", "updatedBy", "updatedAt"]
+    },
+    "ReportedQuestion": {
+      "title": "ReportedQuestion",
+      "description": "Student report of a question error or typo.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "questionId": { "type": "string", "maxLength": 128 },
+        "topicId": { "type": "string", "maxLength": 128 },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 500 },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "questionId", "topicId", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "TestEvent": {
+      "title": "TestEvent",
+      "description": "Admin-organized scheduled competitive mathematics test event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "titleHi": { "type": "string", "maxLength": 140 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "descriptionHi": { "type": "string", "maxLength": 1000 },
+        "bannerPreset": { "type": "string", "enum": ["championship", "speed_sprint", "indigo_crown", "emerald_math", "amber_trophy"] },
+        "bannerUrl": { "type": "string", "maxLength": 500 },
+        "regOpenAt": { "type": "string", "format": "date-time" },
+        "regCloseAt": { "type": "string", "format": "date-time" },
+        "startAt": { "type": "string", "format": "date-time" },
+        "endAt": { "type": "string", "format": "date-time" },
+        "durationMin": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "topicIds": { "type": "array" },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard", "mixed"] },
+        "marksPerQuestion": { "type": "number" },
+        "negativeMarking": { "type": "number" },
+        "maxParticipants": { "type": "number" },
+        "registeredCount": { "type": "number" },
+        "registrationType": { "type": "string", "enum": ["free", "paid"] },
+        "entryFee": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "prizes": { "type": "array" },
+        "status": { "type": "string", "enum": ["draft", "published", "cancelled"] },
+        "resultsPublished": { "type": "boolean" },
+        "publishedResultCount": { "type": "number" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "description", "bannerPreset", "regOpenAt", "regCloseAt", "startAt", "endAt", "durationMin", "totalQuestions", "topicIds", "difficulty", "marksPerQuestion", "negativeMarking", "maxParticipants", "registeredCount", "registrationType", "entryFee", "currency", "prizes", "status", "resultsPublished", "publishedResultCount", "createdBy", "createdAt", "updatedAt"]
+    },
+    "TestEventPaper": {
+      "title": "TestEventPaper",
+      "description": "Locked official question paper for a scheduled test event.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "questions": { "type": "array" },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventId", "questions", "updatedBy", "updatedAt"]
+    },
+    "EventRegistration": {
+      "title": "EventRegistration",
+      "description": "Student registration record for a scheduled test event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userEmail": { "type": "string", "maxLength": 160 },
+        "targetExam": { "type": "string", "maxLength": 80 },
+        "registrationType": { "type": "string", "enum": ["free", "paid"] },
+        "feeAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["free", "pending", "confirmed", "waived"] },
+        "status": { "type": "string", "enum": ["registered", "cancelled"] },
+        "registeredAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "eventId", "userId", "userName", "userEmail", "targetExam", "registrationType", "feeAmount", "paymentStatus", "status", "registeredAt", "updatedAt"]
+    },
+    "EventSubmission": {
+      "title": "EventSubmission",
+      "description": "Student exam attempt, score, rank, and prize verification status for a scheduled test event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventTitle": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "totalQuestions": { "type": "number" },
+        "attemptedQuestions": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "incorrectAnswers": { "type": "number" },
+        "skippedQuestions": { "type": "number" },
+        "score": { "type": "number" },
+        "maxScore": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "timeTakenSec": { "type": "number" },
+        "markedForReviewCount": { "type": "number" },
+        "answersMap": { "type": "object" },
+        "status": { "type": "string", "enum": ["submitted", "disqualified"] },
+        "rank": { "type": "number" },
+        "isWinnerVerified": { "type": "boolean" },
+        "prizeTitle": { "type": "string", "maxLength": 160 },
+        "prizeRankLabel": { "type": "string", "maxLength": 60 },
+        "prizeStatus": { "type": "string", "enum": ["none", "pending", "verified", "disbursed"] },
+        "resultsPublished": { "type": "boolean" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "eventId", "eventTitle", "userId", "userName", "totalQuestions", "attemptedQuestions", "correctAnswers", "incorrectAnswers", "skippedQuestions", "score", "maxScore", "accuracy", "timeTakenSec", "markedForReviewCount", "answersMap", "status", "rank", "isWinnerVerified", "prizeTitle", "prizeRankLabel", "prizeStatus", "resultsPublished", "submittedAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profiles with owner/admin-only PII access."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin role directory."
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Curriculum categories managed by admins."
+    },
+    "/topics/{topicId}": {
+      "schema": { "$ref": "#/entities/Topic" },
+      "description": "Practice topics linked to categories."
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Centralized question bank managed by admins."
+    },
+    "/generator_configs/{configId}": {
+      "schema": { "$ref": "#/entities/GeneratorConfig" },
+      "description": "Dynamic generator bounds configured by admins."
+    },
+    "/practice_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/PracticeSession" },
+      "description": "Student practice and test sessions."
+    },
+    "/user_answers/{answerId}": {
+      "schema": { "$ref": "#/entities/UserAnswer" },
+      "description": "Individual question answers recorded during sessions."
+    },
+    "/user_statistics/{userId}": {
+      "schema": { "$ref": "#/entities/UserStatistics" },
+      "description": "Aggregated user performance statistics."
+    },
+    "/daily_activity/{activityId}": {
+      "schema": { "$ref": "#/entities/DailyActivity" },
+      "description": "Per-day student practice activity summaries."
+    },
+    "/user_settings/{userId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "User preferences and defaults."
+    },
+    "/app_config/{configId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Global content version metadata for offline sync."
+    },
+    "/reported_questions/{reportId}": {
+      "schema": { "$ref": "#/entities/ReportedQuestion" },
+      "description": "Student-submitted question error reports."
+    },
+    "/test_events/{eventId}": {
+      "schema": { "$ref": "#/entities/TestEvent" },
+      "description": "Scheduled competitive test events created by admins."
+    },
+    "/test_event_papers/{eventId}": {
+      "schema": { "$ref": "#/entities/TestEventPaper" },
+      "description": "Official test event question papers accessible only to registered participants during active event windows."
+    },
+    "/event_registrations/{regId}": {
+      "schema": { "$ref": "#/entities/EventRegistration" },
+      "description": "Event participant registrations with deterministic eventId_userId keys."
+    },
+    "/event_submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/EventSubmission" },
+      "description": "Official test event submissions, scores, verified winners, and published leaderboards."
+    }
+  }
+}

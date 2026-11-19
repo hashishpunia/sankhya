@@ -1,0 +1,799 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'hashishpunia@gmail.com'
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidShortStr(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    function isValidOptStr(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isValidDifficulty(val) {
+      return val in ['easy', 'medium', 'hard'];
+    }
+
+    function isValidLanguage(val) {
+      return val in ['en', 'hi'];
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'targetExam', 'preferredLanguage', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'fullName', 'email', 'photoUrl', 'targetExam', 'preferredLanguage', 'role', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && isValidShortStr(data.fullName, 120)
+        && isValidShortStr(data.email, 160)
+        && (!('photoUrl' in data) || isValidOptStr(data.photoUrl, 500))
+        && isValidShortStr(data.targetExam, 80)
+        && isValidLanguage(data.preferredLanguage)
+        && data.role in ['student', 'admin']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'grantedBy', 'createdAt'])
+        && isValidId(data.uid)
+        && isValidShortStr(data.email, 160)
+        && isValidShortStr(data.grantedBy, 128)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'name', 'nameHi', 'description', 'descriptionHi', 'icon', 'order', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'nameHi', 'description', 'descriptionHi', 'icon', 'order', 'active', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidShortStr(data.name, 100)
+        && isValidShortStr(data.nameHi, 120)
+        && isValidOptStr(data.description, 400)
+        && isValidOptStr(data.descriptionHi, 400)
+        && isValidShortStr(data.icon, 40)
+        && data.order is number && data.order >= 0 && data.order <= 1000
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTopic(data) {
+      return data.keys().hasAll(['id', 'categoryId', 'name', 'nameHi', 'description', 'descriptionHi', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimeLimitSec', 'supportsGenerator', 'order', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'categoryId', 'name', 'nameHi', 'description', 'descriptionHi', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimeLimitSec', 'supportsGenerator', 'order', 'active', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.categoryId)
+        && isValidShortStr(data.name, 100)
+        && isValidShortStr(data.nameHi, 120)
+        && isValidOptStr(data.description, 400)
+        && isValidOptStr(data.descriptionHi, 400)
+        && isValidDifficulty(data.defaultDifficulty)
+        && data.defaultQuestionCount is number && data.defaultQuestionCount >= 1 && data.defaultQuestionCount <= 200
+        && data.defaultTimeLimitSec is number && data.defaultTimeLimitSec >= 0 && data.defaultTimeLimitSec <= 10800
+        && data.supportsGenerator is bool
+        && data.order is number && data.order >= 0 && data.order <= 1000
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidQuestion(data) {
+      return data.keys().hasAll(['id', 'categoryId', 'topicId', 'questionText', 'questionType', 'difficulty', 'correctAnswer', 'options', 'explanation', 'marks', 'timeRecommendationSec', 'active', 'contentVersion', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'categoryId', 'topicId', 'questionText', 'questionTextHi', 'questionType', 'difficulty', 'correctAnswer', 'options', 'explanation', 'explanationHi', 'marks', 'timeRecommendationSec', 'active', 'contentVersion', 'createdBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.categoryId)
+        && isValidId(data.topicId)
+        && isValidShortStr(data.questionText, 1000)
+        && (!('questionTextHi' in data) || isValidOptStr(data.questionTextHi, 1000))
+        && data.questionType in ['direct', 'mcq', 'fill_blank', 'missing_number', 'reverse', 'true_false', 'identify_incorrect']
+        && isValidDifficulty(data.difficulty)
+        && isValidShortStr(data.correctAnswer, 200)
+        && data.options is list && data.options.size() <= 6
+        && (data.options.size() == 0 || data.options[0] is string)
+        && isValidOptStr(data.explanation, 1500)
+        && (!('explanationHi' in data) || isValidOptStr(data.explanationHi, 1500))
+        && data.marks is number && data.marks >= 0 && data.marks <= 100
+        && data.timeRecommendationSec is number && data.timeRecommendationSec >= 1 && data.timeRecommendationSec <= 600
+        && data.active is bool
+        && data.contentVersion is number && data.contentVersion >= 1
+        && isValidShortStr(data.createdBy, 128)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGeneratorConfig(data) {
+      return data.keys().hasAll(['id', 'topicKey', 'minNumber', 'maxNumber', 'enabled', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'topicKey', 'minNumber', 'maxNumber', 'digitLength', 'termCount', 'numeratorMin', 'numeratorMax', 'denominatorMin', 'denominatorMax', 'defaultDifficulty', 'enabled', 'updatedBy', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidShortStr(data.topicKey, 64)
+        && data.minNumber is number && data.minNumber >= 0 && data.minNumber <= 1000000
+        && data.maxNumber is number && data.maxNumber >= data.minNumber && data.maxNumber <= 10000000
+        && (!('digitLength' in data) || (data.digitLength is number && data.digitLength >= 1 && data.digitLength <= 9))
+        && (!('termCount' in data) || (data.termCount is number && data.termCount >= 2 && data.termCount <= 10))
+        && (!('numeratorMin' in data) || (data.numeratorMin is number && data.numeratorMin >= 1 && data.numeratorMin <= 1000))
+        && (!('numeratorMax' in data) || (data.numeratorMax is number && data.numeratorMax >= 1 && data.numeratorMax <= 1000))
+        && (!('denominatorMin' in data) || (data.denominatorMin is number && data.denominatorMin >= 1 && data.denominatorMin <= 1000))
+        && (!('denominatorMax' in data) || (data.denominatorMax is number && data.denominatorMax >= 1 && data.denominatorMax <= 1000))
+        && (!('defaultDifficulty' in data) || isValidDifficulty(data.defaultDifficulty))
+        && data.enabled is bool
+        && isValidShortStr(data.updatedBy, 128)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPracticeSession(data) {
+      return data.keys().hasAll(['id', 'userId', 'mode', 'topicId', 'topicName', 'difficulty', 'totalQuestions', 'attemptedQuestions', 'correctAnswers', 'incorrectAnswers', 'skippedQuestions', 'score', 'negativeMarking', 'accuracy', 'totalTimeSec', 'avgTimePerQuestionSec', 'status', 'startedAtIso', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'mode', 'topicId', 'topicName', 'difficulty', 'totalQuestions', 'attemptedQuestions', 'correctAnswers', 'incorrectAnswers', 'skippedQuestions', 'score', 'negativeMarking', 'accuracy', 'totalTimeSec', 'avgTimePerQuestionSec', 'status', 'startedAtIso', 'completedAtIso', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.mode in ['quick_recall', 'basics', 'practice', 'test']
+        && isValidShortStr(data.topicId, 128)
+        && isValidShortStr(data.topicName, 120)
+        && data.difficulty in ['easy', 'medium', 'hard', 'mixed']
+        && data.totalQuestions is number && data.totalQuestions >= 1 && data.totalQuestions <= 200
+        && data.attemptedQuestions is number && data.attemptedQuestions >= 0 && data.attemptedQuestions <= data.totalQuestions
+        && data.correctAnswers is number && data.correctAnswers >= 0 && data.correctAnswers <= data.totalQuestions
+        && data.incorrectAnswers is number && data.incorrectAnswers >= 0 && data.incorrectAnswers <= data.totalQuestions
+        && data.skippedQuestions is number && data.skippedQuestions >= 0 && data.skippedQuestions <= data.totalQuestions
+        && data.score is number && data.score >= -1000 && data.score <= 2000
+        && data.negativeMarking is number && data.negativeMarking >= 0 && data.negativeMarking <= 10
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100
+        && data.totalTimeSec is number && data.totalTimeSec >= 0 && data.totalTimeSec <= 86400
+        && data.avgTimePerQuestionSec is number && data.avgTimePerQuestionSec >= 0 && data.avgTimePerQuestionSec <= 3600
+        && data.status in ['in_progress', 'completed']
+        && isValidShortStr(data.startedAtIso, 40)
+        && (!('completedAtIso' in data) || isValidOptStr(data.completedAtIso, 40))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserAnswer(data) {
+      return data.keys().hasAll(['id', 'userId', 'sessionId', 'questionId', 'topicId', 'questionText', 'selectedAnswer', 'correctAnswer', 'isCorrect', 'isSkipped', 'responseTimeSec', 'answeredAtIso', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'sessionId', 'questionId', 'topicId', 'questionText', 'selectedAnswer', 'correctAnswer', 'isCorrect', 'isSkipped', 'responseTimeSec', 'answeredAtIso', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && isValidId(data.sessionId)
+        && isValidShortStr(data.questionId, 128)
+        && isValidShortStr(data.topicId, 128)
+        && isValidShortStr(data.questionText, 1000)
+        && isValidOptStr(data.selectedAnswer, 200)
+        && isValidShortStr(data.correctAnswer, 200)
+        && data.isCorrect is bool
+        && data.isSkipped is bool
+        && data.responseTimeSec is number && data.responseTimeSec >= 0 && data.responseTimeSec <= 3600
+        && isValidShortStr(data.answeredAtIso, 40)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserStatistics(data) {
+      return data.keys().hasAll(['userId', 'totalAttempted', 'totalCorrect', 'totalIncorrect', 'totalSkipped', 'totalTimeSec', 'currentStreak', 'longestStreak', 'fastestResponseSec', 'lastPracticeDate', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'totalAttempted', 'totalCorrect', 'totalIncorrect', 'totalSkipped', 'totalTimeSec', 'currentStreak', 'longestStreak', 'fastestResponseSec', 'lastPracticeDate', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.totalAttempted is number && data.totalAttempted >= 0
+        && data.totalCorrect is number && data.totalCorrect >= 0
+        && data.totalIncorrect is number && data.totalIncorrect >= 0
+        && data.totalSkipped is number && data.totalSkipped >= 0
+        && data.totalTimeSec is number && data.totalTimeSec >= 0
+        && data.currentStreak is number && data.currentStreak >= 0
+        && data.longestStreak is number && data.longestStreak >= 0
+        && data.fastestResponseSec is number && data.fastestResponseSec >= 0
+        && isValidOptStr(data.lastPracticeDate, 20)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDailyActivity(data) {
+      return data.keys().hasAll(['id', 'userId', 'date', 'questionsAttempted', 'correctAnswers', 'practiceTimeSec', 'sessionsCount', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'date', 'questionsAttempted', 'correctAnswers', 'practiceTimeSec', 'sessionsCount', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && isValidShortStr(data.date, 20)
+        && data.questionsAttempted is number && data.questionsAttempted >= 0 && data.questionsAttempted <= 10000
+        && data.correctAnswers is number && data.correctAnswers >= 0 && data.correctAnswers <= 10000
+        && data.practiceTimeSec is number && data.practiceTimeSec >= 0 && data.practiceTimeSec <= 86400
+        && data.sessionsCount is number && data.sessionsCount >= 0 && data.sessionsCount <= 1000
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserSettings(data) {
+      return data.keys().hasAll(['userId', 'language', 'theme', 'soundEnabled', 'vibrationEnabled', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimerSec', 'dailyTarget', 'notificationsEnabled', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'language', 'theme', 'soundEnabled', 'vibrationEnabled', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimerSec', 'dailyTarget', 'notificationsEnabled', 'updatedAt'])
+        && isValidId(data.userId)
+        && isValidLanguage(data.language)
+        && data.theme in ['light', 'dark', 'system']
+        && data.soundEnabled is bool
+        && data.vibrationEnabled is bool
+        && isValidDifficulty(data.defaultDifficulty)
+        && data.defaultQuestionCount is number && data.defaultQuestionCount >= 5 && data.defaultQuestionCount <= 100
+        && data.defaultTimerSec is number && data.defaultTimerSec >= 0 && data.defaultTimerSec <= 7200
+        && data.dailyTarget is number && data.dailyTarget >= 5 && data.dailyTarget <= 500
+        && data.notificationsEnabled is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAppConfig(data) {
+      return data.keys().hasAll(['id', 'contentVersion', 'maintenanceMode', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'contentVersion', 'maintenanceMode', 'lastPublishNote', 'updatedBy', 'updatedAt'])
+        && isValidId(data.id)
+        && data.contentVersion is number && data.contentVersion >= 1
+        && data.maintenanceMode is bool
+        && (!('lastPublishNote' in data) || isValidOptStr(data.lastPublishNote, 300))
+        && isValidShortStr(data.updatedBy, 128)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReportedQuestion(data) {
+      return data.keys().hasAll(['id', 'userId', 'questionId', 'topicId', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'questionId', 'topicId', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && isValidShortStr(data.questionId, 128)
+        && isValidShortStr(data.topicId, 128)
+        && isValidShortStr(data.reason, 500)
+        && data.status in ['open', 'resolved']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTestEvent(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'bannerPreset', 'regOpenAt', 'regCloseAt', 'startAt', 'endAt', 'durationMin', 'totalQuestions', 'topicIds', 'difficulty', 'marksPerQuestion', 'negativeMarking', 'maxParticipants', 'registeredCount', 'registrationType', 'entryFee', 'currency', 'prizes', 'status', 'resultsPublished', 'publishedResultCount', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'title', 'titleHi', 'description', 'descriptionHi', 'bannerPreset', 'bannerUrl', 'regOpenAt', 'regCloseAt', 'startAt', 'endAt', 'durationMin', 'totalQuestions', 'topicIds', 'difficulty', 'marksPerQuestion', 'negativeMarking', 'maxParticipants', 'registeredCount', 'registrationType', 'entryFee', 'currency', 'prizes', 'status', 'resultsPublished', 'publishedResultCount', 'createdBy', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidShortStr(data.title, 120)
+        && (!('titleHi' in data) || isValidOptStr(data.titleHi, 140))
+        && isValidOptStr(data.description, 1000)
+        && (!('descriptionHi' in data) || isValidOptStr(data.descriptionHi, 1000))
+        && data.bannerPreset in ['championship', 'speed_sprint', 'indigo_crown', 'emerald_math', 'amber_trophy']
+        && (!('bannerUrl' in data) || isValidOptStr(data.bannerUrl, 500))
+        && data.regOpenAt is timestamp
+        && data.regCloseAt is timestamp
+        && data.startAt is timestamp
+        && data.endAt is timestamp
+        && data.regCloseAt > data.regOpenAt
+        && data.endAt > data.startAt
+        && data.durationMin is number && data.durationMin >= 5 && data.durationMin <= 180
+        && data.totalQuestions is number && data.totalQuestions >= 5 && data.totalQuestions <= 100
+        && data.topicIds is list && data.topicIds.size() >= 1 && data.topicIds.size() <= 30 && data.topicIds[0] is string
+        && data.difficulty in ['easy', 'medium', 'hard', 'mixed']
+        && data.marksPerQuestion is number && data.marksPerQuestion >= 1 && data.marksPerQuestion <= 10
+        && data.negativeMarking is number && data.negativeMarking >= 0 && data.negativeMarking <= 5
+        && data.maxParticipants is number && data.maxParticipants >= 0 && data.maxParticipants <= 100000
+        && data.registeredCount is number && data.registeredCount >= 0 && data.registeredCount <= 100000
+        && data.registrationType in ['free', 'paid']
+        && data.entryFee is number && data.entryFee >= 0 && data.entryFee <= 10000
+        && isValidShortStr(data.currency, 10)
+        && data.prizes is list && data.prizes.size() <= 10
+        && data.status in ['draft', 'published', 'cancelled']
+        && data.resultsPublished is bool
+        && data.publishedResultCount is number && data.publishedResultCount >= 0
+        && isValidShortStr(data.createdBy, 128)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTestEventPaper(data) {
+      return data.keys().hasAll(['eventId', 'questions', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['eventId', 'questions', 'updatedBy', 'updatedAt'])
+        && isValidId(data.eventId)
+        && data.questions is list && data.questions.size() >= 1 && data.questions.size() <= 100
+        && isValidShortStr(data.updatedBy, 128)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEventRegistration(data) {
+      return data.keys().hasAll(['id', 'eventId', 'userId', 'userName', 'userEmail', 'targetExam', 'registrationType', 'feeAmount', 'paymentStatus', 'status', 'registeredAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'eventId', 'userId', 'userName', 'userEmail', 'targetExam', 'registrationType', 'feeAmount', 'paymentStatus', 'status', 'registeredAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.eventId)
+        && isValidId(data.userId)
+        && isValidShortStr(data.userName, 120)
+        && isValidOptStr(data.userEmail, 160)
+        && isValidOptStr(data.targetExam, 80)
+        && data.registrationType in ['free', 'paid']
+        && data.feeAmount is number && data.feeAmount >= 0 && data.feeAmount <= 10000
+        && data.paymentStatus in ['free', 'pending', 'confirmed', 'waived']
+        && data.status in ['registered', 'cancelled']
+        && data.registeredAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEventSubmission(data) {
+      return data.keys().hasAll(['id', 'eventId', 'eventTitle', 'userId', 'userName', 'totalQuestions', 'attemptedQuestions', 'correctAnswers', 'incorrectAnswers', 'skippedQuestions', 'score', 'maxScore', 'accuracy', 'timeTakenSec', 'markedForReviewCount', 'answersMap', 'status', 'rank', 'isWinnerVerified', 'prizeTitle', 'prizeRankLabel', 'prizeStatus', 'resultsPublished', 'submittedAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'eventId', 'eventTitle', 'userId', 'userName', 'totalQuestions', 'attemptedQuestions', 'correctAnswers', 'incorrectAnswers', 'skippedQuestions', 'score', 'maxScore', 'accuracy', 'timeTakenSec', 'markedForReviewCount', 'answersMap', 'status', 'rank', 'isWinnerVerified', 'prizeTitle', 'prizeRankLabel', 'prizeStatus', 'resultsPublished', 'submittedAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.eventId)
+        && isValidId(data.userId)
+        && isValidShortStr(data.eventTitle, 120)
+        && isValidShortStr(data.userName, 120)
+        && data.totalQuestions is number && data.totalQuestions >= 1 && data.totalQuestions <= 100
+        && data.attemptedQuestions is number && data.attemptedQuestions >= 0 && data.attemptedQuestions <= data.totalQuestions
+        && data.correctAnswers is number && data.correctAnswers >= 0 && data.correctAnswers <= data.totalQuestions
+        && data.incorrectAnswers is number && data.incorrectAnswers >= 0 && data.incorrectAnswers <= data.totalQuestions
+        && data.skippedQuestions is number && data.skippedQuestions >= 0 && data.skippedQuestions <= data.totalQuestions
+        && data.attemptedQuestions == data.correctAnswers + data.incorrectAnswers
+        && data.attemptedQuestions + data.skippedQuestions == data.totalQuestions
+        && data.score is number && data.score >= -500 && data.score <= 1000
+        && data.maxScore is number && data.maxScore >= 1 && data.maxScore <= 1000
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100
+        && data.timeTakenSec is number && data.timeTakenSec >= 0 && data.timeTakenSec <= 21600
+        && data.markedForReviewCount is number && data.markedForReviewCount >= 0 && data.markedForReviewCount <= data.totalQuestions
+        && data.answersMap is map
+        && data.status in ['submitted', 'disqualified']
+        && data.rank is number && data.rank >= 0 && data.rank <= 100000
+        && data.isWinnerVerified is bool
+        && isValidOptStr(data.prizeTitle, 160)
+        && isValidOptStr(data.prizeRankLabel, 60)
+        && data.prizeStatus in ['none', 'pending', 'verified', 'disbursed']
+        && data.resultsPublished is bool
+        && data.submittedAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isVerified()
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId) && incoming().role == 'student') ||
+          isAdmin()
+        );
+      allow update: if isValidId(userId)
+        && isVerified()
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (isOwner(userId) && incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'photoUrl', 'targetExam', 'preferredLanguage', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(adminId)
+        && isAdmin()
+        && isValidAdminRecord(incoming())
+        && incoming().uid == adminId
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(adminId) && isAdmin() && adminId != request.auth.uid;
+    }
+
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId) && (existing().active == true || isAdmin());
+      allow list: if resource.data.active == true || isAdmin();
+      allow create: if isValidId(categoryId)
+        && isAdmin()
+        && isValidCategory(incoming())
+        && incoming().id == categoryId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(categoryId)
+        && isAdmin()
+        && isValidCategory(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'nameHi', 'description', 'descriptionHi', 'icon', 'order', 'active', 'updatedAt']);
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    match /topics/{topicId} {
+      allow get: if isValidId(topicId) && (existing().active == true || isAdmin());
+      allow list: if resource.data.active == true || isAdmin();
+      allow create: if isValidId(topicId)
+        && isAdmin()
+        && isValidTopic(incoming())
+        && incoming().id == topicId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/categories/$(incoming().categoryId));
+      allow update: if isValidId(topicId)
+        && isAdmin()
+        && isValidTopic(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/categories/$(incoming().categoryId))
+        && incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'name', 'nameHi', 'description', 'descriptionHi', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimeLimitSec', 'supportsGenerator', 'order', 'active', 'updatedAt']);
+      allow delete: if isValidId(topicId) && isAdmin();
+    }
+
+    match /questions/{questionId} {
+      allow get: if isValidId(questionId) && (existing().active == true || isAdmin());
+      allow list: if resource.data.active == true || isAdmin();
+      allow create: if isValidId(questionId)
+        && isAdmin()
+        && isValidQuestion(incoming())
+        && incoming().id == questionId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/categories/$(incoming().categoryId))
+        && exists(/databases/$(database)/documents/topics/$(incoming().topicId));
+      allow update: if isValidId(questionId)
+        && isAdmin()
+        && isValidQuestion(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().createdBy == existing().createdBy
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/categories/$(incoming().categoryId))
+        && exists(/databases/$(database)/documents/topics/$(incoming().topicId))
+        && incoming().diff(existing()).affectedKeys().hasOnly(['categoryId', 'topicId', 'questionText', 'questionTextHi', 'questionType', 'difficulty', 'correctAnswer', 'options', 'explanation', 'explanationHi', 'marks', 'timeRecommendationSec', 'active', 'contentVersion', 'updatedAt']);
+      allow delete: if isValidId(questionId) && isAdmin();
+    }
+
+    match /generator_configs/{configId} {
+      allow get: if isValidId(configId) && (existing().enabled == true || isAdmin());
+      allow list: if resource.data.enabled == true || isAdmin();
+      allow create: if isValidId(configId)
+        && isAdmin()
+        && isValidGeneratorConfig(incoming())
+        && incoming().id == configId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(configId)
+        && isAdmin()
+        && isValidGeneratorConfig(incoming())
+        && incoming().id == existing().id
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['topicKey', 'minNumber', 'maxNumber', 'digitLength', 'termCount', 'numeratorMin', 'numeratorMax', 'denominatorMin', 'denominatorMax', 'defaultDifficulty', 'enabled', 'updatedBy', 'updatedAt']);
+      allow delete: if isValidId(configId) && isAdmin();
+    }
+
+    match /practice_sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(sessionId)
+        && isVerified()
+        && isValidPracticeSession(incoming())
+        && incoming().id == sessionId
+        && incoming().userId == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(sessionId)
+        && isVerified()
+        && isValidPracticeSession(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().startedAtIso == existing().startedAtIso
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            existing().status != 'completed' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['attemptedQuestions', 'correctAnswers', 'incorrectAnswers', 'skippedQuestions', 'score', 'accuracy', 'totalTimeSec', 'avgTimePerQuestionSec', 'status', 'completedAtIso', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(sessionId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /user_answers/{answerId} {
+      allow get: if isValidId(answerId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(answerId)
+        && isVerified()
+        && isValidUserAnswer(incoming())
+        && incoming().id == answerId
+        && incoming().userId == request.auth.uid
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/practice_sessions/$(incoming().sessionId))
+        && get(/databases/$(database)/documents/practice_sessions/$(incoming().sessionId)).data.userId == request.auth.uid;
+      allow update: if isValidId(answerId)
+        && isAdmin()
+        && isValidUserAnswer(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(answerId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /user_statistics/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isVerified()
+        && isOwner(userId)
+        && isValidUserStatistics(incoming())
+        && incoming().userId == userId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerified()
+        && isValidUserStatistics(incoming())
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && (isOwner(userId) || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['totalAttempted', 'totalCorrect', 'totalIncorrect', 'totalSkipped', 'totalTimeSec', 'currentStreak', 'longestStreak', 'fastestResponseSec', 'lastPracticeDate', 'updatedAt']);
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    match /daily_activity/{activityId} {
+      allow get: if isValidId(activityId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(activityId)
+        && isVerified()
+        && isValidDailyActivity(incoming())
+        && incoming().id == activityId
+        && incoming().userId == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(activityId)
+        && isVerified()
+        && isValidDailyActivity(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().date == existing().date
+        && incoming().updatedAt == request.time
+        && (isOwner(existing().userId) || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['questionsAttempted', 'correctAnswers', 'practiceTimeSec', 'sessionsCount', 'updatedAt']);
+      allow delete: if isValidId(activityId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /user_settings/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isVerified()
+        && isOwner(userId)
+        && isValidUserSettings(incoming())
+        && incoming().userId == userId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerified()
+        && isOwner(userId)
+        && isValidUserSettings(incoming())
+        && incoming().userId == existing().userId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['language', 'theme', 'soundEnabled', 'vibrationEnabled', 'defaultDifficulty', 'defaultQuestionCount', 'defaultTimerSec', 'dailyTarget', 'notificationsEnabled', 'updatedAt']);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    match /app_config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if isAdmin();
+      allow create: if isValidId(configId)
+        && isAdmin()
+        && isValidAppConfig(incoming())
+        && incoming().id == configId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(configId)
+        && isAdmin()
+        && isValidAppConfig(incoming())
+        && incoming().id == existing().id
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['contentVersion', 'maintenanceMode', 'lastPublishNote', 'updatedBy', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /reported_questions/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(reportId)
+        && isVerified()
+        && isValidReportedQuestion(incoming())
+        && incoming().id == reportId
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(reportId)
+        && isAdmin()
+        && isValidReportedQuestion(incoming())
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    match /test_events/{eventId} {
+      allow get: if isValidId(eventId) && (existing().status != 'draft' || isAdmin());
+      allow list: if resource.data.status != 'draft' || isAdmin();
+      allow create: if isValidId(eventId)
+        && isAdmin()
+        && isValidTestEvent(incoming())
+        && incoming().id == eventId
+        && incoming().registeredCount == 0
+        && incoming().resultsPublished == false
+        && incoming().publishedResultCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(eventId)
+        && isVerified()
+        && isValidTestEvent(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().createdBy == existing().createdBy
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().status == 'published'
+            && request.time >= existing().regOpenAt
+            && request.time <= existing().regCloseAt
+            && (existing().maxParticipants == 0 || existing().registeredCount < existing().maxParticipants)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['registeredCount', 'updatedAt'])
+            && incoming().registeredCount == existing().registeredCount + 1
+            && existsAfter(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid))
+          ) ||
+          (
+            existing().status == 'published'
+            && request.time < existing().startAt
+            && incoming().diff(existing()).affectedKeys().hasOnly(['registeredCount', 'updatedAt'])
+            && incoming().registeredCount == existing().registeredCount - 1
+            && incoming().registeredCount >= 0
+            && exists(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid))
+            && !existsAfter(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid))
+          )
+        );
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+
+    match /test_event_papers/{eventId} {
+      allow get: if isValidId(eventId) && (
+        isAdmin() ||
+        (
+          isVerified()
+          && exists(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid))
+          && get(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid)).data.status == 'registered'
+          && get(/databases/$(database)/documents/event_registrations/$(eventId + '_' + request.auth.uid)).data.paymentStatus in ['free', 'confirmed', 'waived']
+          && exists(/databases/$(database)/documents/test_events/$(eventId))
+          && get(/databases/$(database)/documents/test_events/$(eventId)).data.status == 'published'
+          && (
+            (
+              request.time >= get(/databases/$(database)/documents/test_events/$(eventId)).data.startAt
+              && request.time <= get(/databases/$(database)/documents/test_events/$(eventId)).data.endAt
+            ) ||
+            (
+              get(/databases/$(database)/documents/test_events/$(eventId)).data.resultsPublished == true
+              && exists(/databases/$(database)/documents/event_submissions/$(eventId + '_' + request.auth.uid))
+            )
+          )
+        )
+      );
+      allow list: if isAdmin();
+      allow create: if isValidId(eventId)
+        && isAdmin()
+        && isValidTestEventPaper(incoming())
+        && incoming().eventId == eventId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(eventId)
+        && isAdmin()
+        && isValidTestEventPaper(incoming())
+        && incoming().eventId == existing().eventId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+
+    match /event_registrations/{regId} {
+      allow get: if isValidId(regId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isValidId(regId)
+        && isVerified()
+        && isValidEventRegistration(incoming())
+        && incoming().id == incoming().eventId + '_' + request.auth.uid
+        && regId == incoming().id
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'registered'
+        && incoming().registeredAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/test_events/$(incoming().eventId))
+        && get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.status == 'published'
+        && request.time >= get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.regOpenAt
+        && request.time <= get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.regCloseAt
+        && (
+          get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.maxParticipants == 0 ||
+          get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.registeredCount < get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.maxParticipants
+        )
+        && incoming().registrationType == get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.registrationType
+        && incoming().feeAmount == get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.entryFee
+        && (
+          (incoming().registrationType == 'free' && incoming().paymentStatus == 'free') ||
+          (incoming().registrationType == 'paid' && incoming().paymentStatus == 'pending')
+        )
+        && getAfter(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.registeredCount == get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.registeredCount + 1;
+      allow update: if isValidId(regId)
+        && isAdmin()
+        && isValidEventRegistration(incoming())
+        && incoming().id == existing().id
+        && incoming().eventId == existing().eventId
+        && incoming().userId == existing().userId
+        && incoming().registeredAt == existing().registeredAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'status', 'updatedAt']);
+      allow delete: if isValidId(regId) && (
+        isAdmin() ||
+        (
+          isVerified()
+          && existing().userId == request.auth.uid
+          && exists(/databases/$(database)/documents/test_events/$(existing().eventId))
+          && request.time < get(/databases/$(database)/documents/test_events/$(existing().eventId)).data.startAt
+          && getAfter(/databases/$(database)/documents/test_events/$(existing().eventId)).data.registeredCount == get(/databases/$(database)/documents/test_events/$(existing().eventId)).data.registeredCount - 1
+        )
+      );
+    }
+
+    match /event_submissions/{submissionId} {
+      allow get: if isValidId(submissionId) && (
+        (isSignedIn() && existing().userId == request.auth.uid) ||
+        (existing().resultsPublished == true && existing().status == 'submitted') ||
+        isAdmin()
+      );
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (resource.data.resultsPublished == true && resource.data.status == 'submitted')
+        || isAdmin();
+      allow create: if isValidId(submissionId)
+        && isVerified()
+        && isValidEventSubmission(incoming())
+        && incoming().id == incoming().eventId + '_' + request.auth.uid
+        && submissionId == incoming().id
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'submitted'
+        && incoming().rank == 0
+        && incoming().isWinnerVerified == false
+        && incoming().prizeStatus == 'none'
+        && incoming().resultsPublished == false
+        && incoming().submittedAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/event_registrations/$(submissionId))
+        && get(/databases/$(database)/documents/event_registrations/$(submissionId)).data.status == 'registered'
+        && get(/databases/$(database)/documents/event_registrations/$(submissionId)).data.paymentStatus in ['free', 'confirmed', 'waived']
+        && exists(/databases/$(database)/documents/test_events/$(incoming().eventId))
+        && get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.status == 'published'
+        && request.time >= get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.startAt
+        && request.time <= get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.endAt + duration.value(180, 's')
+        && incoming().totalQuestions == get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.totalQuestions
+        && incoming().score >= -(get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.totalQuestions * get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.negativeMarking)
+        && incoming().score <= get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.totalQuestions * get(/databases/$(database)/documents/test_events/$(incoming().eventId)).data.marksPerQuestion;
+      allow update: if isValidId(submissionId)
+        && isAdmin()
+        && isValidEventSubmission(incoming())
+        && incoming().id == existing().id
+        && incoming().eventId == existing().eventId
+        && incoming().userId == existing().userId
+        && incoming().submittedAt == existing().submittedAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['rank', 'isWinnerVerified', 'prizeTitle', 'prizeRankLabel', 'prizeStatus', 'resultsPublished', 'status', 'updatedAt']);
+      allow delete: if isValidId(submissionId) && isAdmin();
+    }
+  }
+}
